@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<!--
+  Open this file in a browser, then right-click each canvas and
+  "Save image as" → icon16.png / icon48.png / icon128.png
+  Place the saved files in this icons/ folder.
+-->
+<html>
+<head><title>Icon Generator</title>
+<style>
+  body { background:#222; display:flex; gap:20px; padding:20px; align-items:flex-end; }
+  canvas { display:block; image-rendering:pixelated; }
+  p { color:#aaa; font:12px sans-serif; text-align:center; margin-top:4px; }
+  div { display:flex; flex-direction:column; }
+</style>
+</head>
+<body>
+<script>
+function drawIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+
+  const ctx = canvas.getContext('2d');
+  const cx = size / 2, cy = size / 2, r = size * 0.42;
+
+  // Background circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fill();
+
+  // Moon path
+  const scale = size / 24;
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = '#a594f9';
+  ctx.lineWidth = 2 / scale * (size / 48);  // scale stroke appropriately
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  // Feather "moon" path: M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z
+  // Translated to canvas arc approximation:
+  ctx.restore();
+
+  // Simpler: draw a crescent using two circles
+  ctx.save();
+  ctx.fillStyle = '#a594f9';
+  // Full moon circle
+  const moonR = r * 0.58;
+  const mx = cx - r * 0.05, my = cy;
+  ctx.beginPath();
+  ctx.arc(mx, my, moonR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cut out to make crescent
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(mx + moonR * 0.45, my - moonR * 0.15, moonR * 0.82, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  return canvas;
+}
+
+[16, 48, 128].forEach(size => {
+  const canvas = drawIcon(size);
+  const wrap = document.createElement('div');
+  const label = document.createElement('p');
+  label.textContent = `icon${size}.png`;
+  wrap.appendChild(canvas);
+  wrap.appendChild(label);
+  document.body.appendChild(wrap);
+});
+</script>
+</body>
+</html>

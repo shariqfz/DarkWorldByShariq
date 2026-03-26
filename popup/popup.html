@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DarkWorldByShariq</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo" aria-hidden="true">
+        <!-- Moon icon (Feather Icons) -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </div>
+      <h1 class="title">DarkWorldByShariq</h1>
+    </header>
+
+    <!-- Status pill -->
+    <div class="status-badge" id="statusBadge" role="status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Loading…</span>
+    </div>
+
+    <!-- Toggle controls -->
+    <div class="controls" role="group" aria-label="Dark mode settings">
+
+      <div class="control-row" id="globalRow">
+        <div class="control-label">
+          <span class="control-title">All Pages</span>
+          <span class="control-desc">Apply to every website automatically</span>
+        </div>
+        <label class="toggle" aria-label="Enable for all pages">
+          <input type="checkbox" id="globalToggle">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="control-row" id="tabRow">
+        <div class="control-label">
+          <span class="control-title">This Tab</span>
+          <span class="control-desc">Apply only to the current tab</span>
+        </div>
+        <label class="toggle" aria-label="Enable for this tab">
+          <input type="checkbox" id="tabToggle">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="control-row" id="skipDarkRow">
+        <div class="control-label">
+          <span class="control-title">Skip dark pages</span>
+          <span class="control-desc">Don't transform pages already in dark mode</span>
+        </div>
+        <label class="toggle" aria-label="Skip already-dark pages">
+          <input type="checkbox" id="skipDarkToggle">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
+
+    </div>
+
+    <!-- Note shown when global is on -->
+    <p class="note" id="globalNote" hidden>
+      All-pages mode is on — this tab is included.
+    </p>
+
+    <footer class="footer">DarkWorldByShariq v1.0</footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

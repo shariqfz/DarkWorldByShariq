@@ -1,0 +1,207 @@
+/* ============================================================
+   Dark Mode Pro — Popup Styles
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, sans-serif;
+  background: #13131f;
+  color: #d8d8e8;
+  width: 290px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.popup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px 14px;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #252538;
+}
+
+.logo {
+  width: 26px;
+  height: 26px;
+  color: #8b7cf8;
+  flex-shrink: 0;
+}
+
+.logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.2px;
+}
+
+/* ── Status Badge ────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #1e1e30;
+  border: 1px solid #2e2e45;
+  color: #666;
+  transition: background 0.25s, border-color 0.25s, color 0.25s;
+}
+
+.status-badge.active {
+  background: rgba(139, 124, 248, 0.12);
+  border-color: rgba(139, 124, 248, 0.35);
+  color: #b0a4ff;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #444;
+  transition: background 0.25s;
+  flex-shrink: 0;
+}
+
+.status-badge.active .status-dot {
+  background: #8b7cf8;
+  box-shadow: 0 0 6px rgba(139, 124, 248, 0.7);
+}
+
+/* ── Controls Card ───────────────────────────────────────── */
+.controls {
+  background: #1a1a2e;
+  border-radius: 12px;
+  border: 1px solid #252538;
+  overflow: hidden;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 14px;
+  transition: background 0.15s;
+}
+
+.control-row:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Dim the "This Tab" row when "All Pages" is active */
+.control-row.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.divider {
+  height: 1px;
+  background: #252538;
+  margin: 0 14px;
+}
+
+.control-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.control-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e2e2f0;
+}
+
+.control-desc {
+  font-size: 11px;
+  color: #4e4e6a;
+}
+
+/* ── Toggle Switch ───────────────────────────────────────── */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: #2e2e48;
+  border-radius: 26px;
+  transition: background 0.22s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: #555570;
+  border-radius: 50%;
+  transition: transform 0.22s cubic-bezier(.4,0,.2,1), background 0.22s;
+}
+
+input:checked + .slider {
+  background: #4c3eb8;
+}
+
+input:checked + .slider::before {
+  transform: translateX(20px);
+  background: #c0b4ff;
+}
+
+input:focus-visible + .slider {
+  outline: 2px solid #8b7cf8;
+  outline-offset: 2px;
+}
+
+/* ── Global-on note ──────────────────────────────────────── */
+.note {
+  font-size: 11px;
+  color: #6a6a8a;
+  text-align: center;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+.footer {
+  text-align: center;
+  font-size: 10px;
+  color: #333348;
+  padding-top: 2px;
+}
