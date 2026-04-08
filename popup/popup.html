@@ -41,6 +41,19 @@
         </label>
       </div>
 
+      <div class="divider" id="excludeDivider"></div>
+
+      <div class="control-row" id="excludeRow">
+        <div class="control-label">
+          <span class="control-title">Not This Page</span>
+          <span class="control-desc">Exclude this page from all-pages mode</span>
+        </div>
+        <label class="toggle" aria-label="Exclude this page from all-pages mode">
+          <input type="checkbox" id="excludeToggle">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
+
       <div class="divider"></div>
 
       <div class="control-row" id="tabRow">
@@ -71,7 +84,7 @@
 
     <!-- Note shown when global is on -->
     <p class="note" id="globalNote" hidden>
-      All-pages mode is on — this tab is included.
+      All-pages mode is on — use "Not This Page" to exclude this page.
     </p>
 
     <footer class="footer">DarkWorldByShariq v1.0</footer>

@@ -130,11 +130,15 @@ function applyDarkModeConditionally(skipDarkPages) {
 // ---------------------------------------------------------------------------
 injectStyles(); // Phase 1 — styles ready, class not yet added
 
-chrome.storage.local.get(['globalEnabled', 'skipDarkPages'], data => {
+chrome.storage.local.get(['globalEnabled', 'skipDarkPages', 'excludedUrls'], data => {
   const skipDarkPages = data.skipDarkPages !== false; // default true
 
   if (data.globalEnabled) {
-    applyDarkModeConditionally(skipDarkPages);
+    const excludedUrls = Array.isArray(data.excludedUrls) ? data.excludedUrls : [];
+    const currentUrl = window.location.origin + window.location.pathname;
+    if (!excludedUrls.includes(currentUrl)) {
+      applyDarkModeConditionally(skipDarkPages);
+    }
     return;
   }
 

@@ -6,7 +6,10 @@
 const globalToggle    = document.getElementById('globalToggle');
 const tabToggle       = document.getElementById('tabToggle');
 const skipDarkToggle  = document.getElementById('skipDarkToggle');
+const excludeToggle   = document.getElementById('excludeToggle');
 const tabRow          = document.getElementById('tabRow');
+const excludeRow      = document.getElementById('excludeRow');
+const excludeDivider  = document.getElementById('excludeDivider');
 const globalNote      = document.getElementById('globalNote');
 const statusBadge     = document.getElementById('statusBadge');
 const statusText      = document.getElementById('statusText');
@@ -15,7 +18,8 @@ const statusText      = document.getElementById('statusText');
 // State
 // ---------------------------------------------------------------------------
 let currentTabId = null;
-let uiState = { globalEnabled: false, tabEnabled: false, darkModeOn: false, skipDarkPages: true };
+let currentTabUrl = null;
+let uiState = { globalEnabled: false, tabEnabled: false, darkModeOn: false, skipDarkPages: true, excludedByUrl: false };
 
 // ---------------------------------------------------------------------------
 // UI renderer
@@ -27,6 +31,12 @@ function renderUI(state) {
   globalToggle.checked = state.globalEnabled;
   // Show "This Tab" as checked if dark mode is on for the tab (either way)
   tabToggle.checked = state.tabEnabled || state.globalEnabled;
+
+  // "Not This Page" — only relevant when global is on
+  const showExclude = state.globalEnabled;
+  excludeRow.hidden = !showExclude;
+  excludeDivider.hidden = !showExclude;
+  excludeToggle.checked = !!state.excludedByUrl;
 
   // When global is on, "This Tab" row is redundant — dim it and show note
   tabRow.classList.toggle('disabled', state.globalEnabled);
@@ -50,6 +60,7 @@ chrome.runtime.sendMessage({ type: 'getState' }, response => {
     return;
   }
   currentTabId = response.tabId;
+  currentTabUrl = response.tabUrl;
   renderUI(response);
 });
 
@@ -68,15 +79,32 @@ globalToggle.addEventListener('change', () => {
     renderUI({
       ...uiState,
       globalEnabled: enabled,
-      // If we just turned global ON, this tab is now covered by it
-      darkModeOn: enabled || uiState.tabEnabled
+      // If we just turned global ON, this tab is now covered by it (unless excluded)
+      darkModeOn: (enabled && !uiState.excludedByUrl) || uiState.tabEnabled
     });
   });
 });
 
 // ---------------------------------------------------------------------------
-// "This Tab" toggle
+// "Not This Page" toggle
 // ---------------------------------------------------------------------------
+excludeToggle.addEventListener('change', () => {
+  if (!currentTabUrl) return;
+  const excluded = excludeToggle.checked;
+
+  chrome.runtime.sendMessage({ type: 'setExclude', url: currentTabUrl, excluded }, response => {
+    if (chrome.runtime.lastError || !response?.ok) {
+      excludeToggle.checked = !excluded;
+      return;
+    }
+    renderUI({
+      ...uiState,
+      excludedByUrl: excluded,
+      darkModeOn: uiState.globalEnabled ? !excluded : uiState.tabEnabled
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // "Skip dark pages" toggle
 // ---------------------------------------------------------------------------

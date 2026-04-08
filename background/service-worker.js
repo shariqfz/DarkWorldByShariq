@@ -3,34 +3,51 @@
 // ---------------------------------------------------------------------------
 // State — loaded from storage on every service-worker wake-up
 // ---------------------------------------------------------------------------
-let state = { globalEnabled: false, enabledTabs: [], skipDarkPages: true };
+let state = { globalEnabled: false, enabledTabs: [], skipDarkPages: true, excludedUrls: [] };
 
 // Resolve before handling any message so state is always fresh
 const stateReady = chrome.storage.local
-  .get(['globalEnabled', 'enabledTabs', 'skipDarkPages'])
+  .get(['globalEnabled', 'enabledTabs', 'skipDarkPages', 'excludedUrls'])
   .then(data => {
     state.globalEnabled = !!data.globalEnabled;
     state.enabledTabs = Array.isArray(data.enabledTabs) ? data.enabledTabs : [];
     // Default true — skip pages that already have a dark background
     state.skipDarkPages = data.skipDarkPages !== false;
+    state.excludedUrls = Array.isArray(data.excludedUrls) ? data.excludedUrls : [];
   });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
 function isTabEnabled(tabId) {
   return state.enabledTabs.includes(tabId);
 }
 
-function isDarkModeOn(tabId) {
-  return state.globalEnabled || isTabEnabled(tabId);
+function isUrlExcluded(url) {
+  if (!url) return false;
+  return state.excludedUrls.includes(normalizeUrl(url));
+}
+
+function isDarkModeOn(tabId, url) {
+  if (state.globalEnabled && !isUrlExcluded(url)) return true;
+  return isTabEnabled(tabId);
 }
 
 function persist() {
   chrome.storage.local.set({
     globalEnabled: state.globalEnabled,
     enabledTabs: [...state.enabledTabs],
-    skipDarkPages: state.skipDarkPages
+    skipDarkPages: state.skipDarkPages,
+    excludedUrls: [...state.excludedUrls]
   });
 }
 
@@ -43,7 +60,7 @@ function sendToTab(tabId, enabled) {
 function applyToAllTabs() {
   chrome.tabs.query({}, tabs => {
     for (const tab of tabs) {
-      sendToTab(tab.id, isDarkModeOn(tab.id));
+      sendToTab(tab.id, isDarkModeOn(tab.id, tab.url));
     }
   });
 }
@@ -57,20 +74,25 @@ function handleMessage(msg, sender, sendResponse) {
     // Content script asking "should I be dark right now?"
     case 'checkDarkMode': {
       const tabId = sender.tab?.id;
-      sendResponse({ enabled: isDarkModeOn(tabId) });
+      const tabUrl = sender.tab?.url;
+      sendResponse({ enabled: isDarkModeOn(tabId, tabUrl) });
       break;
     }
 
     // Popup asking for full state of the active tab
     case 'getState': {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-        const tabId = tabs[0]?.id;
+        const tab = tabs[0];
+        const tabId = tab?.id;
+        const tabUrl = tab?.url;
         sendResponse({
           globalEnabled: state.globalEnabled,
           tabEnabled: isTabEnabled(tabId),
-          darkModeOn: isDarkModeOn(tabId),
+          darkModeOn: isDarkModeOn(tabId, tabUrl),
           skipDarkPages: state.skipDarkPages,
-          tabId
+          excludedByUrl: isUrlExcluded(tabUrl),
+          tabId,
+          tabUrl
         });
       });
       // Response sent inside the async callback above — channel kept open by
@@ -95,6 +117,25 @@ function handleMessage(msg, sender, sendResponse) {
       break;
     }
 
+    // Popup toggling "not this page" exclusion
+    case 'setExclude': {
+      const { url, excluded } = msg;
+      const normalized = normalizeUrl(url);
+      if (excluded && !state.excludedUrls.includes(normalized)) {
+        state.excludedUrls.push(normalized);
+      } else if (!excluded) {
+        state.excludedUrls = state.excludedUrls.filter(u => u !== normalized);
+      }
+      persist();
+      // Re-apply to the active tab immediately
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const tab = tabs[0];
+        if (tab) sendToTab(tab.id, isDarkModeOn(tab.id, tab.url));
+      });
+      sendResponse({ ok: true, excludedByUrl: isUrlExcluded(url) });
+      break;
+    }
+
     // Popup toggling dark mode for one specific tab
     case 'setTab': {
       const { tabId, enabled } = msg;
@@ -104,7 +145,9 @@ function handleMessage(msg, sender, sendResponse) {
         state.enabledTabs = state.enabledTabs.filter(id => id !== tabId);
       }
       persist();
-      sendToTab(tabId, isDarkModeOn(tabId));
+      chrome.tabs.get(tabId, tab => {
+        sendToTab(tabId, isDarkModeOn(tabId, tab?.url));
+      });
       sendResponse({ ok: true, tabEnabled: isTabEnabled(tabId) });
       break;
     }
