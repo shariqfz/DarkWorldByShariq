@@ -3,18 +3,25 @@
 // ---------------------------------------------------------------------------
 // State — loaded from storage on every service-worker wake-up
 // ---------------------------------------------------------------------------
-let state = { globalEnabled: false, enabledTabs: [], skipDarkPages: true, excludedUrls: [] };
+let state = { globalEnabled: false, enabledTabs: [], skipDarkPages: true, excludedUrls: [], applyBrightnessToAll: false, globalBrightness: 1 };
+
+// Per-tab brightness — keyed by tabId (string), stored in session storage so
+// it survives page reloads but is cleared when the browser restarts.
+let tabBrightness = {}; // { [tabId]: number (0.1–1.0) }
 
 // Resolve before handling any message so state is always fresh
-const stateReady = chrome.storage.local
-  .get(['globalEnabled', 'enabledTabs', 'skipDarkPages', 'excludedUrls'])
-  .then(data => {
-    state.globalEnabled = !!data.globalEnabled;
-    state.enabledTabs = Array.isArray(data.enabledTabs) ? data.enabledTabs : [];
-    // Default true — skip pages that already have a dark background
-    state.skipDarkPages = data.skipDarkPages !== false;
-    state.excludedUrls = Array.isArray(data.excludedUrls) ? data.excludedUrls : [];
-  });
+const stateReady = Promise.all([
+  chrome.storage.local.get(['globalEnabled', 'enabledTabs', 'skipDarkPages', 'excludedUrls', 'applyBrightnessToAll', 'globalBrightness']),
+  chrome.storage.session.get(['tabBrightness'])
+]).then(([localData, sessionData]) => {
+  state.globalEnabled = !!localData.globalEnabled;
+  state.enabledTabs = Array.isArray(localData.enabledTabs) ? localData.enabledTabs : [];
+  state.skipDarkPages = localData.skipDarkPages !== false;
+  state.excludedUrls = Array.isArray(localData.excludedUrls) ? localData.excludedUrls : [];
+  state.applyBrightnessToAll = !!localData.applyBrightnessToAll;
+  state.globalBrightness = typeof localData.globalBrightness === 'number' ? localData.globalBrightness : 1;
+  tabBrightness = sessionData.tabBrightness || {};
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,8 +54,29 @@ function persist() {
     globalEnabled: state.globalEnabled,
     enabledTabs: [...state.enabledTabs],
     skipDarkPages: state.skipDarkPages,
-    excludedUrls: [...state.excludedUrls]
+    excludedUrls: [...state.excludedUrls],
+    applyBrightnessToAll: state.applyBrightnessToAll,
+    globalBrightness: state.globalBrightness
   });
+}
+
+function broadcastBrightness(brightness) {
+  chrome.tabs.query({}, tabs => {
+    for (const tab of tabs) {
+      chrome.tabs.sendMessage(tab.id, { type: 'applyBrightness', brightness }).catch(() => {});
+    }
+  });
+}
+
+function effectiveBrightnessForTab(tabId) {
+  const perTab = tabBrightness[tabId];
+  if (perTab !== undefined) return perTab;
+  if (state.applyBrightnessToAll) return state.globalBrightness;
+  return 1;
+}
+
+function persistBrightness() {
+  chrome.storage.session.set({ tabBrightness });
 }
 
 function sendToTab(tabId, enabled) {
@@ -79,6 +107,53 @@ function handleMessage(msg, sender, sendResponse) {
       break;
     }
 
+    // Content script asking for its tab's brightness value
+    case 'getBrightness': {
+      const tabId = sender.tab?.id;
+      sendResponse({ brightness: effectiveBrightnessForTab(tabId) });
+      break;
+    }
+
+    // Popup setting brightness — applies globally if "Apply to all tabs" is on,
+    // otherwise just to the active tab.
+    case 'setBrightness': {
+      const { tabId, brightness } = msg;
+      if (state.applyBrightnessToAll) {
+        state.globalBrightness = brightness;
+        // Per-tab overrides should not override the global slider in this mode
+        tabBrightness = {};
+        persist();
+        persistBrightness();
+        broadcastBrightness(brightness);
+      } else {
+        if (brightness >= 1) {
+          delete tabBrightness[tabId];
+        } else {
+          tabBrightness[tabId] = brightness;
+        }
+        persistBrightness();
+        chrome.tabs.sendMessage(tabId, { type: 'applyBrightness', brightness }).catch(() => {});
+      }
+      sendResponse({ ok: true });
+      break;
+    }
+
+    // Popup toggling the "Apply brightness to all tabs" mode
+    case 'setBrightnessApplyAll': {
+      state.applyBrightnessToAll = !!msg.enabled;
+      if (state.applyBrightnessToAll) {
+        if (typeof msg.brightness === 'number') {
+          state.globalBrightness = msg.brightness;
+        }
+        tabBrightness = {};
+        persistBrightness();
+        broadcastBrightness(state.globalBrightness);
+      }
+      persist();
+      sendResponse({ ok: true, applyBrightnessToAll: state.applyBrightnessToAll });
+      break;
+    }
+
     // Popup asking for full state of the active tab
     case 'getState': {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
@@ -91,6 +166,8 @@ function handleMessage(msg, sender, sendResponse) {
           darkModeOn: isDarkModeOn(tabId, tabUrl),
           skipDarkPages: state.skipDarkPages,
           excludedByUrl: isUrlExcluded(tabUrl),
+          brightness: effectiveBrightnessForTab(tabId),
+          applyBrightnessToAll: state.applyBrightnessToAll,
           tabId,
           tabUrl
         });
@@ -161,6 +238,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ---------------------------------------------------------------------------
+// Push brightness to a tab when it becomes active.
+//
+// When "Apply to all tabs" is on, a tab that was in the background may have
+// missed the broadcast (e.g. it was discarded, was loading at the time, or
+// the message hit before its onMessage listener registered). Re-pushing on
+// activation keeps the active tab in sync with the current global brightness.
+// ---------------------------------------------------------------------------
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  stateReady.then(() => {
+    const brightness = effectiveBrightnessForTab(tabId);
+    chrome.tabs.sendMessage(tabId, { type: 'applyBrightness', brightness }).catch(() => {});
+  });
+});
+
+// Also push when a tab finishes loading — covers new tabs and navigations,
+// since the content script's onMessage listener is reliably registered by then.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== 'complete') return;
+  stateReady.then(() => {
+    const brightness = effectiveBrightnessForTab(tabId);
+    chrome.tabs.sendMessage(tabId, { type: 'applyBrightness', brightness }).catch(() => {});
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cleanup — remove closed tabs from the per-tab list
 // ---------------------------------------------------------------------------
 chrome.tabs.onRemoved.addListener(tabId => {
@@ -168,5 +270,10 @@ chrome.tabs.onRemoved.addListener(tabId => {
     const before = state.enabledTabs.length;
     state.enabledTabs = state.enabledTabs.filter(id => id !== tabId);
     if (state.enabledTabs.length !== before) persist();
+
+    if (tabBrightness[tabId] !== undefined) {
+      delete tabBrightness[tabId];
+      persistBrightness();
+    }
   });
 });

@@ -3,8 +3,9 @@
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const DMP_STYLE_ID = 'dark-mode-pro-styles';
-const DMP_CLASS    = 'dark-mode-pro-active';
+const DMP_STYLE_ID        = 'dark-mode-pro-styles';
+const DMP_CLASS           = 'dark-mode-pro-active';
+const DMP_BRIGHTNESS_CLASS = 'dark-mode-pro-brightness';
 
 // ---------------------------------------------------------------------------
 // CSS injected into the page
@@ -16,13 +17,20 @@ const DMP_CLASS    = 'dark-mode-pro-active';
 //   - Contrast ratios are preserved because we are just flipping the
 //     luminance axis; text that was readable stays readable.
 //
+// Brightness is controlled via the CSS custom property --dmp-brightness.
+// The brightness() step is appended after invert+hue-rotate so it dims the
+// already-dark result (values < 1 make the page darker).
+//
 // Media elements (img, video, canvas, iframe …) are counter-inverted with
 // the same filter so they appear at their original colours / brightness
 // rather than looking like photo negatives.
+//
+// The DMP_BRIGHTNESS_CLASS rule handles brightness when dark mode is OFF —
+// it applies only a brightness filter so the user can dim the original page.
 // ---------------------------------------------------------------------------
 const DARK_MODE_CSS = `
   html.${DMP_CLASS} {
-    filter: invert(100%) hue-rotate(180deg) !important;
+    filter: invert(100%) hue-rotate(180deg) brightness(var(--dmp-brightness, 1)) !important;
     background-color: #111111 !important;
     /* Tell the browser UI (scrollbars, form controls) to use dark colours */
     color-scheme: dark !important;
@@ -41,6 +49,11 @@ const DARK_MODE_CSS = `
   html.${DMP_CLASS} embed,
   html.${DMP_CLASS} object {
     filter: invert(100%) hue-rotate(180deg) !important;
+  }
+
+  /* Brightness-only mode (dark mode off, brightness < 1) */
+  html.${DMP_BRIGHTNESS_CLASS}:not(.${DMP_CLASS}) {
+    filter: brightness(var(--dmp-brightness, 1)) !important;
   }
 `;
 
@@ -63,6 +76,22 @@ function enableDarkMode() {
 
 function disableDarkMode() {
   document.documentElement.classList.remove(DMP_CLASS);
+}
+
+// ---------------------------------------------------------------------------
+// Brightness control
+//
+// value: number in [0.1, 1.0] where 1.0 = normal (no change).
+// Sets --dmp-brightness on <html> and adds/removes the brightness class for
+// the non-dark-mode brightness rule.
+// ---------------------------------------------------------------------------
+function applyBrightness(value) {
+  document.documentElement.style.setProperty('--dmp-brightness', value);
+  if (value < 1) {
+    document.documentElement.classList.add(DMP_BRIGHTNESS_CLASS);
+  } else {
+    document.documentElement.classList.remove(DMP_BRIGHTNESS_CLASS);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +159,12 @@ function applyDarkModeConditionally(skipDarkPages) {
 // ---------------------------------------------------------------------------
 injectStyles(); // Phase 1 — styles ready, class not yet added
 
+// Load brightness for this tab from session storage (via background)
+chrome.runtime.sendMessage({ type: 'getBrightness' }, response => {
+  if (chrome.runtime.lastError) return;
+  if (response?.brightness !== undefined) applyBrightness(response.brightness);
+});
+
 chrome.storage.local.get(['globalEnabled', 'skipDarkPages', 'excludedUrls'], data => {
   const skipDarkPages = data.skipDarkPages !== false; // default true
 
@@ -156,10 +191,26 @@ chrome.storage.local.get(['globalEnabled', 'skipDarkPages', 'excludedUrls'], dat
 // the already-dark detection so the toggle feels responsive and predictable.
 // ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener(msg => {
-  if (msg.type !== 'setDarkMode') return;
-  if (msg.enabled) {
-    enableDarkMode();
-  } else {
-    disableDarkMode();
+  if (msg.type === 'setDarkMode') {
+    if (msg.enabled) {
+      enableDarkMode();
+    } else {
+      disableDarkMode();
+    }
+    return;
   }
+  if (msg.type === 'applyBrightness') {
+    applyBrightness(msg.brightness);
+  }
+});
+
+// Re-fetch brightness whenever the page becomes visible — catches cases where
+// "Apply to all tabs" was toggled or its value changed while this tab was in
+// the background and the broadcast didn't reach us.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  chrome.runtime.sendMessage({ type: 'getBrightness' }, response => {
+    if (chrome.runtime.lastError) return;
+    if (response?.brightness !== undefined) applyBrightness(response.brightness);
+  });
 });

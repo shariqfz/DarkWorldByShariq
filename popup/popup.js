@@ -13,13 +13,16 @@ const excludeDivider  = document.getElementById('excludeDivider');
 const globalNote      = document.getElementById('globalNote');
 const statusBadge     = document.getElementById('statusBadge');
 const statusText      = document.getElementById('statusText');
+const brightnessSlider    = document.getElementById('brightnessSlider');
+const brightnessValue     = document.getElementById('brightnessValue');
+const brightnessAllToggle = document.getElementById('brightnessAllToggle');
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let currentTabId = null;
 let currentTabUrl = null;
-let uiState = { globalEnabled: false, tabEnabled: false, darkModeOn: false, skipDarkPages: true, excludedByUrl: false };
+let uiState = { globalEnabled: false, tabEnabled: false, darkModeOn: false, skipDarkPages: true, excludedByUrl: false, brightness: 1, applyBrightnessToAll: false };
 
 // ---------------------------------------------------------------------------
 // UI renderer
@@ -49,6 +52,24 @@ function renderUI(state) {
   const on = state.darkModeOn;
   statusText.textContent = on ? 'Dark mode ON' : 'Dark mode OFF';
   statusBadge.classList.toggle('active', on);
+
+  // Brightness slider — convert 0.1–1.0 to 10–100
+  const pct = Math.round((state.brightness ?? 1) * 100);
+  brightnessSlider.value = pct;
+  brightnessValue.textContent = pct + '%';
+  updateSliderFill(pct);
+
+  // Apply-to-all-tabs toggle
+  brightnessAllToggle.checked = !!state.applyBrightnessToAll;
+}
+
+// ---------------------------------------------------------------------------
+// Slider fill — updates the CSS custom property that drives the track gradient
+// ---------------------------------------------------------------------------
+function updateSliderFill(pct) {
+  // pct is 10–100; map to 0%–100% of the track
+  const fill = ((pct - 10) / 90) * 100;
+  brightnessSlider.style.setProperty('--fill', fill + '%');
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +165,38 @@ tabToggle.addEventListener('change', () => {
         tabEnabled: enabled,
         darkModeOn: enabled
       });
+    }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Brightness slider
+// ---------------------------------------------------------------------------
+brightnessSlider.addEventListener('input', () => {
+  const pct = parseInt(brightnessSlider.value, 10);
+  brightnessValue.textContent = pct + '%';
+  updateSliderFill(pct);
+
+  const brightness = pct / 100;
+  chrome.runtime.sendMessage({ type: 'setBrightness', tabId: currentTabId, brightness });
+  uiState = { ...uiState, brightness };
+});
+
+// ---------------------------------------------------------------------------
+// "Apply to all tabs" brightness toggle
+// ---------------------------------------------------------------------------
+brightnessAllToggle.addEventListener('change', () => {
+  const enabled = brightnessAllToggle.checked;
+  const brightness = parseInt(brightnessSlider.value, 10) / 100;
+
+  chrome.runtime.sendMessage(
+    { type: 'setBrightnessApplyAll', enabled, brightness },
+    response => {
+      if (chrome.runtime.lastError || !response?.ok) {
+        brightnessAllToggle.checked = !enabled;
+        return;
+      }
+      uiState = { ...uiState, applyBrightnessToAll: enabled };
     }
   );
 });

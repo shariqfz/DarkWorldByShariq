@@ -33,7 +33,6 @@
       <div class="control-row" id="globalRow">
         <div class="control-label">
           <span class="control-title">All Pages</span>
-          <span class="control-desc">Apply to every website automatically</span>
         </div>
         <label class="toggle" aria-label="Enable for all pages">
           <input type="checkbox" id="globalToggle">
@@ -46,7 +45,6 @@
       <div class="control-row" id="excludeRow">
         <div class="control-label">
           <span class="control-title">Not This Page</span>
-          <span class="control-desc">Exclude this page from all-pages mode</span>
         </div>
         <label class="toggle" aria-label="Exclude this page from all-pages mode">
           <input type="checkbox" id="excludeToggle">
@@ -59,7 +57,6 @@
       <div class="control-row" id="tabRow">
         <div class="control-label">
           <span class="control-title">This Tab</span>
-          <span class="control-desc">Apply only to the current tab</span>
         </div>
         <label class="toggle" aria-label="Enable for this tab">
           <input type="checkbox" id="tabToggle">
@@ -72,7 +69,6 @@
       <div class="control-row" id="skipDarkRow">
         <div class="control-label">
           <span class="control-title">Skip dark pages</span>
-          <span class="control-desc">Don't transform pages already in dark mode</span>
         </div>
         <label class="toggle" aria-label="Skip already-dark pages">
           <input type="checkbox" id="skipDarkToggle">
@@ -80,6 +76,39 @@
         </label>
       </div>
 
+    </div>
+
+    <!-- Brightness control -->
+    <div class="brightness-card" role="group" aria-label="Brightness control">
+      <div class="brightness-header">
+        <div class="brightness-label">
+          <!-- Sun icon -->
+          <svg class="brightness-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <span class="control-title">Brightness</span>
+        </div>
+        <span class="brightness-value" id="brightnessValue">100%</span>
+      </div>
+      <input type="range" class="brightness-slider" id="brightnessSlider"
+             min="10" max="100" value="100" step="1"
+             aria-label="Page brightness">
+      <div class="brightness-all-row">
+        <span class="brightness-all-label">Apply to all tabs</span>
+        <label class="toggle toggle-sm" aria-label="Apply brightness to all tabs">
+          <input type="checkbox" id="brightnessAllToggle">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+      </div>
     </div>
 
     <!-- Note shown when global is on -->
