@@ -55,6 +55,17 @@ const DARK_MODE_CSS = `
   html.${DMP_BRIGHTNESS_CLASS}:not(.${DMP_CLASS}) {
     filter: brightness(var(--dmp-brightness, 1)) !important;
   }
+
+  /*
+   * PDF viewer toolbar — Chrome's built-in viewer ships a dark toolbar by
+   * default, which our html-level invert flips to light. Counter-invert the
+   * <viewer-toolbar> host element (the toolbar's shadow content sits inside
+   * it) so it visually returns to its original dark look.
+   */
+  html.${DMP_CLASS} viewer-toolbar,
+  html.${DMP_CLASS} pdf-viewer-toolbar {
+    filter: invert(100%) hue-rotate(180deg) !important;
+  }
 `;
 
 // ---------------------------------------------------------------------------
@@ -72,10 +83,66 @@ function injectStyles() {
 function enableDarkMode() {
   injectStyles();
   document.documentElement.classList.add(DMP_CLASS);
+  syncPdfToolbarFilter();
 }
 
 function disableDarkMode() {
   document.documentElement.classList.remove(DMP_CLASS);
+  syncPdfToolbarFilter();
+}
+
+// ---------------------------------------------------------------------------
+// PDF viewer toolbar — counter-invert so it stays in its original dark look.
+//
+// The <div id="toolbar"> lives inside the PDF viewer's shadow DOM, so a CSS
+// selector from the host page can't reach it. We walk the shadow tree from
+// JS and set an inline filter on the element directly. The inline style
+// survives shadow boundaries because it's set on the element itself.
+//
+// The toolbar mounts asynchronously after the viewer initializes, so if we
+// don't find it on the first try we poll briefly.
+// ---------------------------------------------------------------------------
+const COUNTER_INVERT = 'invert(100%) hue-rotate(180deg)';
+let pdfToolbarPollId = null;
+
+function findPdfToolbar(root = document) {
+  if (!root) return null;
+  if (root.getElementById) {
+    const direct = root.getElementById('toolbar');
+    if (direct) return direct;
+  }
+  const hosts = root.querySelectorAll ? root.querySelectorAll('*') : [];
+  for (const el of hosts) {
+    if (el.shadowRoot) {
+      const found = findPdfToolbar(el.shadowRoot);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function syncPdfToolbarFilter() {
+  if (!isPdfPage()) return;
+  const darkOn = document.documentElement.classList.contains(DMP_CLASS);
+
+  const apply = () => {
+    const toolbar = findPdfToolbar();
+    if (!toolbar) return false;
+    toolbar.style.filter = darkOn ? COUNTER_INVERT : '';
+    return true;
+  };
+
+  if (apply()) return;
+
+  // Toolbar isn't mounted yet — poll for up to ~5s.
+  if (pdfToolbarPollId) clearInterval(pdfToolbarPollId);
+  let attempts = 0;
+  pdfToolbarPollId = setInterval(() => {
+    if (apply() || ++attempts >= 50) {
+      clearInterval(pdfToolbarPollId);
+      pdfToolbarPollId = null;
+    }
+  }, 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +188,14 @@ function isPageAlreadyDark() {
   return false;
 }
 
+// Chrome wraps PDFs in a viewer whose chrome (toolbar, scrollbars) is dark,
+// which fools isPageAlreadyDark() into skipping the page. Detect the PDF
+// wrapper so we can bypass that check.
+function isPdfPage() {
+  if (document.contentType === 'application/pdf') return true;
+  return !!document.querySelector('embed[type="application/pdf"]');
+}
+
 // ---------------------------------------------------------------------------
 // Conditional apply — respects the "skip already-dark pages" setting.
 //
@@ -130,7 +205,9 @@ function isPageAlreadyDark() {
 // immediately to avoid any flash of light content.
 // ---------------------------------------------------------------------------
 function applyDarkModeConditionally(skipDarkPages) {
-  if (!skipDarkPages) {
+  // PDF wrapper pages always have a dark viewer chrome — bypass the
+  // already-dark detection so the filter still runs.
+  if (!skipDarkPages || isPdfPage()) {
     enableDarkMode();
     return;
   }
@@ -139,10 +216,16 @@ function applyDarkModeConditionally(skipDarkPages) {
     if (!isPageAlreadyDark()) enableDarkMode();
   };
 
+  // Defer to the next animation frame so the page's first style/paint pass
+  // (and any associated font fetches) runs before our getComputedStyle call.
+  // Otherwise Chrome attributes the page's own CSP / network errors to us,
+  // since our forced style recalc is what triggered the fetch this turn.
+  const scheduleCheck = () => requestAnimationFrame(check);
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', check, { once: true });
+    document.addEventListener('DOMContentLoaded', scheduleCheck, { once: true });
   } else {
-    check();
+    scheduleCheck();
   }
 }
 
